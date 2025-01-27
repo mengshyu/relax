@@ -27,6 +27,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <sys/sysinfo.h>
 
 #include "workspace_pool.h"
 
@@ -42,6 +43,18 @@ class CPUDeviceAPI final : public DeviceAPI {
   void GetAttr(Device dev, DeviceAttrKind kind, TVMRetValue* rv) final {
     if (kind == kExist) {
       *rv = 1;
+    }
+
+    switch (kind) {
+      case kExist:
+        break;
+      case kTotalGlobalMemory: {
+        struct sysinfo info;
+        *rv = static_cast<int64_t>(info.totalram);
+        return;
+      }
+      default:
+        break;
     }
   }
   void* AllocDataSpace(Device dev, size_t nbytes, size_t alignment, DLDataType type_hint) final {
