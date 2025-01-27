@@ -27,12 +27,24 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <sys/sysinfo.h>
 
 #include "workspace_pool.h"
 
 #ifdef __ANDROID__
 #include <android/api-level.h>
+#endif
+
+#if defined(__linux__) || defined(__ANDROID__)
+#include <sys/sysinfo.h>
+#endif
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#include <TargetConditionals.h>
 #endif
 
 namespace tvm {
@@ -49,9 +61,32 @@ class CPUDeviceAPI final : public DeviceAPI {
       case kExist:
         break;
       case kTotalGlobalMemory: {
+#if defined(__linux__) || defined(__ANDROID__)
         struct sysinfo info;
-        *rv = static_cast<int64_t>(info.totalram);
-        return;
+        if (sysinfo(&info) == 0) {
+          *rv = static_cast<int64_t>(info.totalram) * info.mem_unit;  // Convert to bytes
+        } else {
+          *rv = -1;
+        }
+#elif defined(_WIN32)
+        MEMORYSTATUSEX statex;
+        statex.dwLength = sizeof(statex);
+        if (GlobalMemoryStatusEx(&statex)) {
+          *rv = static_cast<int64_t>(statex.ullTotalPhys);  // Total physical memory in bytes
+        } else {
+          *rv = -1;
+        }
+#elif defined(__APPLE__)
+        int64_t mem;
+        size_t size = sizeof(mem);
+        if (sysctlbyname("hw.memsize", &mem, &size, nullptr, 0) == 0) {
+          *rv = mem;
+        } else {
+          *rv = -1;
+        }
+#else
+        *rv = -1;
+#endif
       }
       default:
         break;
